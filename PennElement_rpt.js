@@ -1,46 +1,57 @@
-// SELECTOR element
-/* $AC$ PennController.newSelector(name) Creates a new Selector element $AC$ */
-/* $AC$ PennController.getSelector(name) Retrieves an existing Selector element $AC$ */
+// RPT element
+/* $AC$ PennController.newRPT(name) Creates a new RPT element $AC$ */
+/* $AC$ PennController.getRPT(name) Retrieves an existing RPT element $AC$ */
 window.PennController._AddElementType("RPT", function (PennEngine) {
 	let that = this;
 	this.immediate = function (id, text) {
+		console.log(text);
+		//default values
 		if (text === undefined) {
 			text = "lorem ipsum dolor sit amet";
 			if (id === undefined || typeof (id) != "string" || id.length == 0)
 				id = "RPT";
 			this.id = id;
 		}
-		text = text.toLowerCase();
+
+		//text cleanup
+		// text = text.toLowerCase();
 		// .,?!/():;"
 		text = text.replaceAll(/[\.\,\?\!\/\\\(\)\:\;]/ig, "");
 		text = text.replaceAll(/\s+/ig, " ");
-		this.words = text.split(" ");
+
+		this.words = text.split(" ");	//List of word strings
 		this.id = id;
-		this.stressColor = "#FF0000";
-		this.boundaryColor = "#0000FF";
-		this.boundaryString = " | ";
+
+		//default values
+		this.stressColor = "#FF0000";	//Color of stressed words
+		this.boundaryColor = "#0000FF";	//Color of word boundaries
+		this.boundaryString = "  ";		//String to be inserted between boundaries
+		this.log = false;				//Logging
+		this.stressWarningMessage = "Please click on at least one word.";
+		this.boundaryWarningMessage = "Please click on at least one boundary.";
 	};
 
 	this.uponCreation = function (resolve) {
-		this.wordsJQ = [];
-		this.spacesJQ = [];
-		this.wordToggled = [];
-		this.spaceToggled = [];
-		this.clicks = [];
-		this.toggleWord = (i) => {
-			this.wordToggled[i] = !this.wordToggled[i];
-			this.clicks.push(["Click", i+1, Date.now(), this.words[i]]);
+		this.wordsJQ = [];				//List of HTML elements of words
+		this.spacesJQ = [];				//List of HTML elements of word boundaries
+		this.stressToggled = [];			//List of booleans
+		this.boundaryToggled = [];			//List of booleans
+		this.clicks = [];				//List of ["StressClick"|"BoundaryClick",time,word]
+		this.toggleStress = (i) => {
+			this.stressToggled[i] = !this.stressToggled[i];
+			this.clicks.push(["ProminenceClick", i + 1, Date.now(), this.words[i]]);
 			this.lastClicked = Date.now();
-			if (this.wordToggled[i]) {
+			if (this.stressToggled[i]) {
 				this.wordsJQ[i].css("background-color", this.stressColor);
 			} else {
 				this.wordsJQ[i].css("background-color", "");
 			}
 		};
-		this.toggleSpace = (i) => {
-			this.spaceToggled[i] = !this.spaceToggled[i];
+		this.toggleBoundary = (i) => {
+			this.boundaryToggled[i] = !this.boundaryToggled[i];
+			this.clicks.push(["BoundaryClick", i + 1, Date.now(), this.words[i]]);
 			this.lastClicked = Date.now();
-			if (this.spaceToggled[i]) {
+			if (this.boundaryToggled[i]) {
 				this.spacesJQ[i].css("background-color", this.boundaryColor);
 			} else {
 				this.spacesJQ[i].css("background-color", "");
@@ -50,23 +61,30 @@ window.PennController._AddElementType("RPT", function (PennEngine) {
 		let jq = $("<div></div>");
 		for (let i = 0; i < this.words.length; i++) {
 			let word = $("<span></span>").text(this.words[i]);
-			word[0].onclick = (() => this.toggleWord(i));
+			word[0].onclick = (() => this.toggleStress(i));
 			jq.append(word);
 			this.wordsJQ.push(word);
-			this.wordToggled.push(false);
+			this.stressToggled.push(false);
 
 			if (i < this.words.length - 1) {
 				let space = $("<span></span>").text(this.boundaryString);
-				space[0].onclick = (() => this.toggleSpace(i));
+				space[0].onclick = (() => this.toggleBoundary(i));
 				jq.append(space);
 				this.spacesJQ.push(space);
-				this.spaceToggled.push(false);
+				this.boundaryToggled.push(false);
 			}
 		}
-		jq.css("white-space","pre-wrap");
-		this.jQueryElement = jq;
+		//allow for multiple spaces in text
+		jq.css("white-space", "pre-wrap");
+		jq.css("word-break","keep-all");
+		//disable highlighting
+		jq.css("user-select", "none");
+		jq.css("-webkit-user-select", "none");
+		jq.css("-khtml-user-select", "none");
+		jq.css("-moz-user-select", "none");
+		jq.css("-ms-user-select", "none");
 
-		this.log = false;
+		this.jQueryElement = jq;
 
 		this.lastClicked = 0;
 		resolve();
@@ -74,30 +92,63 @@ window.PennController._AddElementType("RPT", function (PennEngine) {
 
 	this.end = function () {
 		if (this.log) {
-			for (let c in this.clicks)
-                PennEngine.controllers.running.save(this.type, this.id, ...this.clicks[c]);
-			PennEngine.controllers.running.save(this.type, this.id, "Submit", "[" + this.wordToggled.join(";") + "];[" + this.spaceToggled.join(";") + "]", this.lastClicked);
+			for (let c in this.clicks) {
+				PennEngine.controllers.running.save(this.type, this.id, ...this.clicks[c]);
+			}
+			for (var i = 0; i < this.words.length; i++) {
+				PennEngine.controllers.running.save(this.type, this.id, "Prominent", this.stressToggled[i], this.lastClicked, this.words[i]);
+			}
+			for (var i = 0; i < this.words.length - 1; i++) {
+				PennEngine.controllers.running.save(this.type, this.id, "Pre-Boundary", this.boundaryToggled[i], this.lastClicked, this.words[i]);
+			}
+			PennEngine.controllers.running.save(this.type, this.id, "Pre-Boundary", "false", this.lastClicked, this.words[this.words.length-1]);
 		}
 	};
 
 	this.actions = {
-		toggleWord: function (resolve, index) {
-			this.toggleWord(index);
+		toggleStress: function (resolve, index) {
+			this.toggleStress(index);
 			resolve();
 		},
-		toggleSpace: function (resolve, index) {
-			this.toggleSpace(index);
+		toggleBoundary: function (resolve, index) {
+			this.toggleBoundary(index);
 			resolve();
 		},
-		wait: function (_resolve, _test) {
-
-			// resolve();
+		warn: function(resolve) {
+			var word = false;
+			var space = false;
+			for(var i = 0; i < this.stressToggled.length; i++) {
+				if(this.stressToggled[i]) word = true;
+			}
+			for(var i = 0; i < this.boundaryToggled.length; i++) {
+				if(this.boundaryToggled[i]) space = true;
+			}
+			if(!word) {
+				alert(this.stressWarningMessage);
+				resolve();
+				return;
+			}
+			if(!space) {
+				alert(this.boundaryWarningMessage);
+			}
+			resolve();
 		}
 	};
 
 	this.settings = {
-		callback: function (resolve, ..._elementCommands) {
-
+		callback: function (resolve, ...elementCommands) {
+			let oldToggleStress = this.toggleStress;
+			let oldToggleBoundary = this.toggleBoundary;
+			this.toggleStress = async function (i) {
+				oldToggleStress.apply(this, [i]);
+				for (let c in elementCommands)
+					await elementCommands[c]._runPromises();
+			}
+			this.toggleBoundary = async function (i) {
+				oldToggleBoundary.apply(this, [i]);
+				for (let c in elementCommands)
+					await elementCommands[c]._runPromises();
+			}
 			resolve();
 		},
 		stressColor: function (resolve, color) {
@@ -110,7 +161,7 @@ window.PennController._AddElementType("RPT", function (PennEngine) {
 		},
 		boundaryString: function (resolve, string) {
 			this.boundaryString = string;
-			for(let i = 0; i<this.spacesJQ.length;i++) {
+			for (let i = 0; i < this.spacesJQ.length; i++) {
 				this.spacesJQ[i].text(this.boundaryString);
 			}
 			resolve();
@@ -119,14 +170,41 @@ window.PennController._AddElementType("RPT", function (PennEngine) {
 			this.log = true;
 			resolve();
 		},
-		once: function (resolve) {
-
+		stressWarning: function(resolve, message) {
+			this.stressWarningMessage = message;
+			resolve();
+		},
+		boundaryWarning: function(resolve, message) {
+			this.boundaryWarningMessage = message;
 			resolve();
 		}
 	};
 
 	this.test = {
-		//TODO
+		stressClicked: function() {
+			for(let b in this.stressToggled) {
+				if(b) return true;
+			}
+			return false;
+		},
+		boundaryClicked: function() {
+			for(let b in this.boundaryToggled) {
+				if(b) return true;
+			}
+			return false;
+		},
+		bothClicked: function() {
+			console.log("bruh2");
+			var word = false;
+			var space = false;
+			for(var i = 0; i < this.stressToggled.length; i++) {
+				if(this.stressToggled[i]) word = true;
+			}
+			for(var i = 0; i < this.spaceToggled.length; i++) {
+				if(this.boundaryToggled[i]) space = true;
+			}
+			return word && space;
+		}
 	};
 
 });
