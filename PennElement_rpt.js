@@ -58,6 +58,7 @@ window.PennController._AddElementType("RPT", function (PennEngine) {
 			}
 		};
 
+		//creates HTML elements
 		let jq = $("<div></div>");
 		for (let i = 0; i < this.words.length; i++) {
 			let word = $("<span></span>").text(this.words[i]);
@@ -92,6 +93,7 @@ window.PennController._AddElementType("RPT", function (PennEngine) {
 
 	this.end = function () {
 		if (this.log) {
+			//logging
 			for (let c in this.clicks) {
 				PennEngine.controllers.running.save(this.type, this.id, ...this.clicks[c]);
 			}
@@ -106,6 +108,21 @@ window.PennController._AddElementType("RPT", function (PennEngine) {
 	};
 
 	this.actions = {
+		callback: function (resolve, ...elementCommands) {
+			let oldToggleStress = this.toggleStress;
+			let oldToggleBoundary = this.toggleBoundary;
+			this.toggleStress = async function (i) {
+				oldToggleStress.apply(this, [i]);
+				for (let c in elementCommands)
+					await elementCommands[c]._runPromises();
+			}
+			this.toggleBoundary = async function (i) {
+				oldToggleBoundary.apply(this, [i]);
+				for (let c in elementCommands)
+					await elementCommands[c]._runPromises();
+			}
+			resolve();
+		},
 		toggleStress: function (resolve, index) {
 			this.toggleStress(index);
 			resolve();
@@ -136,21 +153,6 @@ window.PennController._AddElementType("RPT", function (PennEngine) {
 	};
 
 	this.settings = {
-		callback: function (resolve, ...elementCommands) {
-			let oldToggleStress = this.toggleStress;
-			let oldToggleBoundary = this.toggleBoundary;
-			this.toggleStress = async function (i) {
-				oldToggleStress.apply(this, [i]);
-				for (let c in elementCommands)
-					await elementCommands[c]._runPromises();
-			}
-			this.toggleBoundary = async function (i) {
-				oldToggleBoundary.apply(this, [i]);
-				for (let c in elementCommands)
-					await elementCommands[c]._runPromises();
-			}
-			resolve();
-		},
 		stressColor: function (resolve, color) {
 			this.stressColor = color;
 			resolve();
@@ -194,13 +196,12 @@ window.PennController._AddElementType("RPT", function (PennEngine) {
 			return false;
 		},
 		bothClicked: function() {
-			console.log("bruh2");
 			var word = false;
 			var space = false;
 			for(var i = 0; i < this.stressToggled.length; i++) {
 				if(this.stressToggled[i]) word = true;
 			}
-			for(var i = 0; i < this.spaceToggled.length; i++) {
+			for(var i = 0; i < this.boundaryToggled.length; i++) {
 				if(this.boundaryToggled[i]) space = true;
 			}
 			return word && space;
